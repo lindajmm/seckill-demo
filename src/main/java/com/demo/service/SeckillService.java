@@ -3,6 +3,8 @@ package com.demo.service;
 
 import com.demo.entity.SeckillOrder;
 
+import java.time.LocalDateTime;
+
 public interface SeckillService {
 
     /**
@@ -12,4 +14,6 @@ public interface SeckillService {
      * @return 生成的订单对象
      */
     SeckillOrder doSeckill(Long seckillId, Long userPhone);
+
+    public LocalDateTime getTime(Long seckillGoodId);
 }

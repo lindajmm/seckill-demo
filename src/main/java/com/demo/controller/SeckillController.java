@@ -4,18 +4,21 @@ package com.demo.controller;
 
 import com.demo.entity.SeckillOrder;
 import com.demo.service.SeckillService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+
 
 @RestController
 @RequestMapping("/seckill")
 public class SeckillController {
+    private final static Logger log = LoggerFactory.getLogger(SeckillController.class);
+
 
     @Autowired
     private SeckillService seckillService;
@@ -35,6 +38,23 @@ public class SeckillController {
             result.put("code", 0);
             result.put("msg", "秒杀成功");
             result.put("data", order);
+        } catch (Exception e) {
+            result.put("code", -1);
+            result.put("msg", e.getMessage());
+        }
+        return result;
+    }
+
+
+
+    @GetMapping("/endtime/{seckillGoodId}")
+    public Map<String, Object> getTimeOfSeckillGoods(@PathVariable Long seckillGoodId) {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            LocalDateTime time = seckillService.getTime(seckillGoodId);
+            result.put("code", 0);
+            result.put("msg", "查询时间成功");
+            result.put("data", String.format("商品id %d 的 end time 是： %s ", seckillGoodId, time));
         } catch (Exception e) {
             result.put("code", -1);
             result.put("msg", e.getMessage());
