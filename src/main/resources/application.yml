@@ -41,3 +41,21 @@ mybatis-plus:
   configuration:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl # 开发时打印SQL日志
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"           # 暴露所有端点（生产环境需按需开放）
+      base-path: /actuator     # 默认路径，可自定义
+  endpoint:
+    health:
+      show-details: always    # 健康检查显示详细信息
+    metrics:
+      enabled: true           # 开启指标端点
+    prometheus:
+      enabled: true           # 开启 Prometheus 格式输出
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+

@@ -4,6 +4,10 @@ package com.demo.service.impl;
 import com.demo.dto.SeckillOrderMessage;
 import com.demo.entity.SeckillGoods;
 import com.demo.entity.SeckillOrder;
+import com.demo.exception.SeckillEndException;
+import com.demo.exception.SeckillNotFoundException;
+import com.demo.exception.SeckillNotStartException;
+import com.demo.exception.SeckillStockEmptyException;
 import com.demo.mapper.SeckillGoodsMapper;
 import com.demo.service.MQSender;
 import com.demo.service.RedisStockService;
@@ -31,24 +35,29 @@ public class SeckillServiceImpl implements SeckillService {
     @Override
     public SeckillOrder doSeckill(Long seckillId, Long userPhone) {
 
+
         // 1. 查询秒杀商品信息（校验活动时间）
         SeckillGoods seckillGoods = seckillGoodsMapper.selectById(seckillId);
         if (seckillGoods == null) {
-            throw new RuntimeException("秒杀商品不存在");
+//            throw new RuntimeException("秒杀商品不存在");
+            throw new SeckillNotFoundException(seckillId);  // 抛出异常
         }
         LocalDateTime now = LocalDateTime.now();
         if (now.isBefore(seckillGoods.getStartTime())) {
-            throw new RuntimeException("秒杀尚未开始");
+//            throw new RuntimeException("秒杀尚未开始");
+            throw new SeckillNotStartException(seckillId, seckillGoods.getStartTime().toString());
         }
         if (now.isAfter(seckillGoods.getEndTime())) {
-            throw new RuntimeException("秒杀已结束");
+//            throw new RuntimeException("秒杀已结束");
+            throw new SeckillEndException(seckillId, seckillGoods.getEndTime().toString());
         }
 
         // 2. Redis 原子扣减库存
         Long remainStock = redisStockService.decreaseStock(seckillId);
         if (remainStock == null || remainStock < 0) {
             // 库存不足，直接返回失败
-            throw new RuntimeException("库存不足");
+//            throw new RuntimeException("库存不足");
+            throw new SeckillStockEmptyException(seckillId, seckillGoods.getSeckillStock());
         }
         log.info("Redis 扣库存成功，剩余库存: {}", remainStock);
 
