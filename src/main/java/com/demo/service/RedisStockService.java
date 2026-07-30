@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -36,6 +37,9 @@ public class RedisStockService {
     private StringRedisTemplate redisTemplate;
 
     @Autowired
+    private RedisTemplate<String, Object> redisObjectTemplate;  // 用于存对象
+
+    @Autowired
     private SeckillGoodsMapper seckillGoodsMapper;
 
     @Autowired
@@ -46,6 +50,8 @@ public class RedisStockService {
 
     // 布隆过滤器Key
     private static final String BLOOM_FILTER_KEY = "bloom:seckill:goods";
+
+    private static final String GOODS_CACHE_PREFIX = "seckill:goods:";
 
     @PostConstruct
     public void init(){
@@ -127,6 +133,8 @@ public class RedisStockService {
             if (Boolean.TRUE.equals(success)) {
                 log.info("库存预热成功：seckillId={}, stock={}", goods.getSeckillId(), stockNumber);
             }
+
+            cacheGoodsInfo(goods);
         });
 
 
@@ -240,6 +248,90 @@ public class RedisStockService {
             log.error("Redis 更新失败，请检查缓存一致性: seckillId={}", seckillId, e);
             // 这里不抛异常，因为 DB 已经更新成功了
             // 可以发送告警，或者将失败记录写入本地表，由定时任务补偿
+        }
+    }
+
+    /**
+     * 缓存商品完整信息（带随机过期时间，防雪崩）
+     */
+    public void cacheGoodsInfo(SeckillGoods goods) {
+        String key = GOODS_CACHE_PREFIX + goods.getSeckillId();
+        // 过期时间 5-10 分钟，随机值防雪崩
+        int randomTtl = 300 + ThreadLocalRandom.current().nextInt(300);
+        // 直接用 String 结构存储整个对象（简单高效）
+        redisObjectTemplate.opsForValue().set(key, goods, randomTtl, TimeUnit.SECONDS);
+/*
+        redisObjectTemplate.opsForHash().put(key, "info", goods);
+        redisObjectTemplate.expire(key, randomTtl, TimeUnit.SECONDS);*/
+//        redisTemplate.opsForValue().set(key, goods, randomTtl, TimeUnit.SECONDS);
+        log.info("商品信息缓存成功: seckillId={}, ttl={}s", goods.getSeckillId(), randomTtl);
+    }
+
+    /**
+     * 从缓存获取商品完整信息
+     */
+    public SeckillGoods getGoodsFromCache(Long seckillId) {
+        String key = GOODS_CACHE_PREFIX + seckillId;
+//        Object obj = redisObjectTemplate.opsForHash().get(key, "info");
+        Object obj = redisObjectTemplate.opsForValue().get(key);
+        if (obj == null) {
+            return null;
+        }
+        // 如果已经正确配置了序列化器，这里可以直接强转
+        return (SeckillGoods) obj;
+    }
+
+    /**
+     * 优先从缓存获取，缓存不存在则查数据库（防击穿）
+     */
+    public SeckillGoods getGoodsWithCache(Long seckillId) {
+        // 1. 查缓存
+        SeckillGoods goods = getGoodsFromCache(seckillId);
+        if (goods != null) {
+            return goods;
+        }
+
+        // 2. 缓存未命中 → 查数据库（带互斥锁防击穿）
+        return getGoodsWithMutexLock(seckillId);
+    }
+
+    /**
+     * 互斥锁重建缓存（防击穿）
+     */
+    private SeckillGoods getGoodsWithMutexLock(Long seckillId) {
+        String lockKey = "lock:goods:" + seckillId;
+        String cacheKey = GOODS_CACHE_PREFIX + seckillId;
+
+        try {
+            // 尝试获取锁，5秒超时
+            Boolean locked = redisTemplate.opsForValue()
+                    .setIfAbsent(lockKey, "1", 5, TimeUnit.SECONDS);
+
+            if (Boolean.TRUE.equals(locked)) {
+                try {
+                    // 双重检查
+                    SeckillGoods goods = getGoodsFromCache(seckillId);
+                    if (goods != null) {
+                        return goods;
+                    }
+
+                    // 查数据库
+                    goods = seckillGoodsMapper.selectById(seckillId);
+                    if (goods != null) {
+                        cacheGoodsInfo(goods);
+                    }
+                    return goods;
+                } finally {
+                    redisTemplate.delete(lockKey);
+                }
+            } else {
+                // 等待其他线程重建缓存
+                Thread.sleep(50);
+                return getGoodsFromCache(seckillId);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return seckillGoodsMapper.selectById(seckillId);
         }
     }
 

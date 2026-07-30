@@ -77,9 +77,17 @@ public class SeckillServiceImpl implements SeckillService {
         }
 
         // 1. 查询秒杀商品信息（校验活动时间）
-       SeckillGoods seckillGoods = seckillGoodsMapper.selectById(seckillId);
+      /* //刚开始直接从数据库里查，后面查缓存
+      SeckillGoods seckillGoods = seckillGoodsMapper.selectById(seckillId);
         if (seckillGoods == null) {
             throw new SeckillNotFoundException(seckillId);  // 抛出异常
+        }*/
+
+        // ========== 1. 从缓存获取商品信息（替代直接查数据库） ==========
+        SeckillGoods seckillGoods = redisStockService.getGoodsWithCache(seckillId);
+        log.info("缓存命中： {}", seckillGoods);
+        if (seckillGoods == null) {
+            throw new SeckillNotFoundException(seckillId);
         }
         LocalDateTime now = LocalDateTime.now(Clock.systemUTC());
         if (now.isBefore(seckillGoods.getStartTime())) {
@@ -96,7 +104,7 @@ public class SeckillServiceImpl implements SeckillService {
         RLock lock = redissonClient.getLock("lock:product:" + seckillId);
 
         try {
-            // 尝试加锁，最多等待3秒，锁持有时间默认30秒（Watchdog会自动续期）
+            // 尝试加锁，最多等待5秒，锁持有时间默认30秒（Watchdog会自动续期）
             boolean locked = lock.tryLock(5, 30, TimeUnit.SECONDS);
             if (!locked) {
                 throw new RuntimeException("系统繁忙，请稍后重试");
