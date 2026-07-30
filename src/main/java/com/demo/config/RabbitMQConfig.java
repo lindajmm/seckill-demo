@@ -24,6 +24,12 @@ public class RabbitMQConfig {
     // 路由键
     public static final String SECKILL_ROUTING_KEY = "seckill.order";
 
+
+    // ========== 重置库存相关（新增） ==========
+    public static final String RESET_EXCHANGE = "reset.exchange";
+    public static final String RESET_QUEUE = "reset.stock.queue";
+    public static final String RESET_ROUTING_KEY = "reset.stock";
+
     /**
      * 创建交换机（Topic 类型，支持通配符）
      */
@@ -49,6 +55,26 @@ public class RabbitMQConfig {
                 .bind(seckillQueue())
                 .to(seckillExchange())
                 .with(SECKILL_ROUTING_KEY);
+    }
+
+
+    // ========== 重置库存相关 Bean（新增） ==========
+    @Bean
+    public TopicExchange resetExchange() {
+        return new TopicExchange(RESET_EXCHANGE);
+    }
+
+    @Bean
+    public Queue resetQueue() {
+        return new Queue(RESET_QUEUE, true);
+    }
+
+    @Bean
+    public Binding resetBinding() {
+        return BindingBuilder
+                .bind(resetQueue())
+                .to(resetExchange())
+                .with(RESET_ROUTING_KEY);
     }
 
 

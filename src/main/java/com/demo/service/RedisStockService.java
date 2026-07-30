@@ -2,19 +2,26 @@ package com.demo.service;
 
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.demo.dto.ResetStockMessage;
 import com.demo.entity.SeckillGoods;
+import com.demo.exception.GoodNotFoundException;
 import com.demo.mapper.SeckillGoodsMapper;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author: Linda
@@ -31,20 +38,64 @@ public class RedisStockService {
     @Autowired
     private SeckillGoodsMapper seckillGoodsMapper;
 
+    @Autowired
+    private MQSender mqSender;
+
     // 库存 Key 前缀
     private static final String STOCK_KEY_PREFIX = "seckill:stock:";
+
+    // 布隆过滤器Key
+    private static final String BLOOM_FILTER_KEY = "bloom:seckill:goods";
+
+    @PostConstruct
+    public void init(){
+        log.info("========== 开始初始化 Redis 数据 ==========");
+       initBloomFilter();
+       initStock();
+        log.info("========== 初始化 Redis 数据 完成 ==========");
+    }
+
+    /**
+     * 项目启动时初始化布隆过滤器（加载所有有效商品ID）
+     */
+
+    public void initBloomFilter() {
+        // 1. 从数据库查询所有有效的秒杀商品ID
+        List<Long> seckillIds = seckillGoodsMapper.selectAllValidIds();
+        if (seckillIds == null || seckillIds.isEmpty()) {
+            System.out.println("没有需要加载的秒杀商品ID");
+            return;
+        }
+
+        // 2. 将商品ID加载到布隆过滤器
+        // 注意：Redisson的RBloomFilter不支持直接存储Long，需要转为String
+        for (Long id : seckillIds) {
+            redisTemplate.opsForSet().add(BLOOM_FILTER_KEY, id.toString());
+        }
+        System.out.println("布隆过滤器加载完成，共加载 " + seckillIds.size() + " 个商品ID");
+    }
+
+    /**
+     * 判断商品ID是否可能存在于布隆过滤器中
+     * @return true=可能存在，false=一定不存在
+     */
+    public boolean bloomContains(Long seckillId) {
+        return Boolean.TRUE.equals(
+                redisTemplate.opsForSet().isMember(BLOOM_FILTER_KEY, seckillId.toString())
+        );
+    }
 
     /*
     try to get seckill goods from db instead of hard code
     */
-    @PostConstruct
+
     public void initStock() {
         // get seckill goods list from database where the version is 0 and end_time is greater than now
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(Clock.systemUTC());
         LambdaQueryWrapper<SeckillGoods> wrapper = new LambdaQueryWrapper<>();
-        wrapper.gt(SeckillGoods::getEndTime, now)
-                .eq(SeckillGoods::getVersion, 0);
+        wrapper.gt(SeckillGoods::getEndTime, now);
+//                .eq(SeckillGoods::getVersion, 0);
         List<SeckillGoods> activeList = seckillGoodsMapper.selectList(wrapper);
       /*  for(SeckillGoods seckillGoods : activeList){
             String key = STOCK_KEY_PREFIX + seckillGoods.getGoodsId();
@@ -70,6 +121,9 @@ public class RedisStockService {
             String stockNumber = goods.getSeckillStock().toString();
             // SET key value NX，原子操作
             Boolean success = redisTemplate.opsForValue().setIfAbsent(key, stockNumber);
+
+//            redisTemplate.expire(key, 10, TimeUnit.SECONDS);
+            log.info("redis set key {} value NX result is {}", key, success);
             if (Boolean.TRUE.equals(success)) {
                 log.info("库存预热成功：seckillId={}, stock={}", goods.getSeckillId(), stockNumber);
             }
@@ -104,14 +158,7 @@ public class RedisStockService {
         }
     }*/
 
-    // 对外提供重置库存接口，运营/定时任务调用
-    public void resetSeckillStock(Long seckillId, Integer stockNumber) {
-        String key = STOCK_KEY_PREFIX + seckillId;
-        if (Boolean.TRUE.equals(redisTemplate.hasKey(key))) {
-            //给已经存在Redis 离得key 重置库存数量
-            redisTemplate.opsForValue().set(key, stockNumber.toString());
-        }
-    }
+
 
 
 
@@ -150,7 +197,50 @@ public class RedisStockService {
      */
     public Long getCurrentStock(Long seckillId) {
         String key = STOCK_KEY_PREFIX + seckillId;
-        String value = redisTemplate.opsForValue().get(key);
+//        String value = redisTemplate.opsForValue().get(key);
+// 引入 private RedisTemplate<String, Object> redisTemplate; 之后用下面的代码
+        String value = (String) redisTemplate.opsForValue().get(key);
+
         return value == null ? null : Long.valueOf(value);
     }
+
+
+    public void resetSeckillStockAsync(Long seckillId, Integer stockNumber) {
+        // 1. 先更新 Redis（快速生效）
+        String key = STOCK_KEY_PREFIX + seckillId;
+        redisTemplate.opsForValue().set(key, stockNumber.toString());
+
+        // 2. 发送异步消息，由消费者更新数据库
+        mqSender.sendResetMessage(seckillId, stockNumber);
+    }
+/*
+    // 对外提供重置库存接口，运营/定时任务调用
+    public void resetSeckillStock(Long seckillId, Integer stockNumber) {
+        String key = STOCK_KEY_PREFIX + seckillId;
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(key))) {
+            //给已经存在Redis 离得key 重置库存数量
+            redisTemplate.opsForValue().set(key, stockNumber.toString());
+        }
+    }*/
+    //改进的重置库存方法
+    @Transactional
+    public void resetSeckillStock(Long seckillId, Integer stockNumber) {
+        // 1. 更新数据库
+        int affected = seckillGoodsMapper.updateStock(seckillId, stockNumber);
+        if (affected == 0) {
+            throw new GoodNotFoundException("商品不存在，重置失败");
+        }
+
+        // 2. 更新 Redis
+        try {
+            String key = STOCK_KEY_PREFIX + seckillId;
+            redisTemplate.opsForValue().set(key, stockNumber.toString());
+            log.info("库存重置完成: seckillId={}, stock={}", seckillId, stockNumber);
+        } catch (Exception e) {
+            log.error("Redis 更新失败，请检查缓存一致性: seckillId={}", seckillId, e);
+            // 这里不抛异常，因为 DB 已经更新成功了
+            // 可以发送告警，或者将失败记录写入本地表，由定时任务补偿
+        }
+    }
+
 }

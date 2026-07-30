@@ -32,7 +32,10 @@ public enum ResultCode {
 
     // ========== 订单业务状态码 (3000-3999) ==========
     ORDER_NOT_FOUND(3001, "订单不存在", HttpStatus.NOT_FOUND),
-    ORDER_STATUS_ERROR(3002, "订单状态异常", HttpStatus.CONFLICT);
+    ORDER_STATUS_ERROR(3002, "订单状态异常", HttpStatus.CONFLICT),
+
+    // ========== 商品业务 (4000-4999) ==========
+    GOOD_NOT_FOUND(4001, "商品不存在", HttpStatus.NOT_FOUND);
 
     private final Integer code;
     private final String msg;

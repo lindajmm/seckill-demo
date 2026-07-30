@@ -44,7 +44,7 @@
             <appender-ref ref="CONSOLE"/>
             <appender-ref ref="FILE"/>
         </root>
-        <logger name="com.demo" level="DEBUG" additivity="false">
+        <logger name="com.demo" level="INFO" additivity="false">
             <appender-ref ref="CONSOLE"/>
             <appender-ref ref="FILE"/>
         </logger>

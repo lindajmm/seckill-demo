@@ -4,6 +4,9 @@ spring:
       username: hostonly_user
       password: 123456  # 改成你自己的数据库密码
       driver-class-name: com.mysql.cj.jdbc.Driver
+      hikari:
+          maximum-pool-size: 50    # 增大连接池
+          minimum-idle: 20
 
 
   flyway:
@@ -19,8 +22,8 @@ spring:
           password: devlinda123456
           lettuce:
               pool:
-                  max-active: 20
-                  max-idle: 10
+                  max-active: 50
+                  max-idle: 20
                   min-idle: 5
   rabbitmq:
       host: 192.168.5.101  # 你的虚拟机IP
@@ -59,3 +62,15 @@ management:
       prometheus:
         enabled: true
 
+# Redisson 单独配置
+redisson:
+  config: |
+    singleServerConfig:
+      address: "redis://192.168.5.101:6379"
+      password: devlinda123456   # 如果有密码就填
+      connectionPoolSize: 64
+      connectionMinimumIdleSize: 10
+      timeout: 3000
+      retryAttempts: 3
+      retryInterval: 1500
+    lockWatchdogTimeout: 30000   # 看门狗超时时间，默认30秒

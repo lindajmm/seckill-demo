@@ -1,14 +1,11 @@
 package com.demo.controller;
 
 
-
 import com.demo.common.Result;
 import com.demo.common.SeckillMetrics;
 import com.demo.entity.SeckillOrder;
 import com.demo.enums.ResultCode;
 import com.demo.service.SeckillService;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,7 +22,6 @@ import java.util.Map;
 public class SeckillController {
     private final static Logger log = LoggerFactory.getLogger(SeckillController.class);
 
-
     @Autowired
     private SeckillService seckillService;
 
@@ -35,7 +31,7 @@ public class SeckillController {
 
    /* public SeckillController(MeterRegistry registry) {
         log.info("========== SeckillController 构造函数被执行了！ ==========");
-        log.info("当前时间：{}", LocalDateTime.now());
+        log.info("当前时间：{}", LocalDateTime.now(Clock.systemUTC()));
         // 创建两个计数器：秒杀成功计数、秒杀失败计数
         this.successCounter = Counter.builder("seckill.request.success")
                 .description("秒杀成功次数")
@@ -58,9 +54,11 @@ public class SeckillController {
      * 用户手机号固定为 13800138000（简化，后续可扩展）
      */
     @PostMapping("/{seckillId}")
-    public ResponseEntity<Result<SeckillOrder>> seckill(@PathVariable Long seckillId) {
+//    public ResponseEntity<Result<SeckillOrder>> seckill(@PathVariable Long seckillId) {
+    public ResponseEntity<Result<SeckillOrder>> seckill(@PathVariable Long seckillId,
+                                                        @RequestHeader(value = "X-User-Phone", defaultValue = "13800138000") Long userPhone) {
         log.info("秒杀活动开始, seckillId: {}", seckillId);
-        Long userPhone = 13800138000L;
+//        Long userPhone = 13800138000L;
         SeckillOrder order = seckillService.doSeckill(seckillId, userPhone);
         seckillMetrics.incrementSuccess();
 //        return ResponseEntity.ok(Result.success(order));

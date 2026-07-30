@@ -1,6 +1,6 @@
 
 -- 1. 商品表
-CREATE TABLE `t_goods` (
+CREATE TABLE IF NOT EXISTS `t_goods` (
   `goods_id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '商品ID',
   `goods_name` varchar(120) NOT NULL COMMENT '商品名称',
   `price` decimal(10,2) NOT NULL COMMENT '商品原价',
@@ -9,7 +9,7 @@ CREATE TABLE `t_goods` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='普通商品表';
 
 -- 2. 秒杀商品表（关联普通商品，新增秒杀特有属性）
-CREATE TABLE `t_seckill_goods` (
+CREATE TABLE IF NOT EXISTS `t_seckill_goods` (
   `seckill_id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '秒杀商品ID',
   `goods_id` bigint(20) NOT NULL COMMENT '关联的商品ID',
   `seckill_price` decimal(10,2) NOT NULL COMMENT '秒杀价格',
@@ -22,7 +22,7 @@ CREATE TABLE `t_seckill_goods` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='秒杀商品表';
 
 -- 3. 秒杀订单表
-CREATE TABLE `t_seckill_order` (
+CREATE TABLE IF NOT EXISTS `t_seckill_order` (
   `order_id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '订单ID',
   `user_phone` bigint(20) NOT NULL COMMENT '用户手机号（为简化设计，直接存手机号）',
   `seckill_id` bigint(20) NOT NULL COMMENT '秒杀商品ID',

@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SeckillOrderMessage implements Serializable {
+    private String bizId;           // 新增：业务唯一ID
     private Long seckillId;
     private Long userPhone;
     private BigDecimal orderAmount;

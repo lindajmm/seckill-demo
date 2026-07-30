@@ -2,6 +2,7 @@ package com.demo.service;
 
 
 import com.demo.config.RabbitMQConfig;
+import com.demo.dto.ResetStockMessage;
 import com.demo.dto.SeckillOrderMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,5 +31,11 @@ public class MQSender {
                 message
         );
         log.info("MQ 消息已发送: {} ", message);
+    }
+
+    public void sendResetMessage(Long seckillId, Integer stockNumber){
+        // 2. 发送异步消息，由消费者更新数据库
+        ResetStockMessage message = new ResetStockMessage(seckillId, stockNumber);
+        rabbitTemplate.convertAndSend("reset.exchange", "reset.stock", message);
     }
 }
