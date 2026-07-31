@@ -8,6 +8,7 @@ import com.demo.mapper.SeckillGoodsMapper;
 import com.demo.mapper.SeckillMessageMapper;
 import com.demo.mapper.SeckillOrderMapper;
 import com.demo.service.RedisStockService;
+import com.demo.util.ErrorSummaryUtil;
 import com.rabbitmq.client.Channel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -125,7 +126,10 @@ public class SeckillOrderConsumer {
                  // 记录错误信息
                  SeckillMessage msg = messageMapper.selectByBizId(bizId);
                  if (msg != null) {
-                     messageMapper.markFailed(msg.getId(), e.getMessage());
+
+                     // 只存精简信息
+                     String errorSummary = ErrorSummaryUtil.extractSummary(e);
+                     messageMapper.markFailed(msg.getId(), errorSummary);
                  }
                /*  // 拒绝消息，不重新入队（由定时任务重试）
                  channel.basicNack(tag, false, false);*/

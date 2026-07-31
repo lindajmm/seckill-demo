@@ -6,6 +6,7 @@ import com.demo.entity.SeckillMessage;
 import com.demo.enums.MessageStatus;
 import com.demo.mapper.SeckillMessageMapper;
 import com.demo.service.MQSender;
+import com.demo.util.ErrorSummaryUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
@@ -116,13 +117,15 @@ public class MessageRetryTask {
 
             messageMapper.incrementRetry(
                     message.getId(),
-                    e.getMessage()
+                    // 只存精简信息
+                    ErrorSummaryUtil.extractSummary(e)
             );
 
             // 检查是否超过最大重试次数
             if (newRetryCount >= message.getMaxRetry()) {
                 // 标记为最终失败
-                messageMapper.markFailed(message.getId(), "超过最大重试次数：" + e.getMessage());
+                messageMapper.markFailed(message.getId(), "超过最大重试次数：" +  // 只存精简信息
+                        ErrorSummaryUtil.extractSummary(e));
 
                 // 发送告警
 //                sendAlert(message, e);

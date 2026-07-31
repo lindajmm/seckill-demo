@@ -55,21 +55,16 @@ public class SeckillServiceImpl implements SeckillService {
     public SeckillOrder doSeckill(Long seckillId, Long userPhone) {
         // ========== 限流检查（放在最前面） ==========
 //        String limitKey = "rate:limit:user:" + userPhone + ":product:" + seckillId;
-       /* //压力测试先把限流注释掉，测完再恢复
+        //压力测试先把限流注释掉，测完再恢复
         String limitKey = "rate:limit:user:" + userPhone + ":product:" + seckillId;
         System.out.println("限流Key: " + limitKey);
         // 配置：每分钟最多 3 次请求
         // 在 SeckillServiceImpl 中
         boolean allowed = rateLimiterUtil.tryAcquireDoubao(limitKey, 3, 3, 60, 1);
-        if (!allowed) {
-            throw new RuntimeException("操作过于频繁，请稍后再试");
-        }
-
         System.out.println("限流结果: " + allowed);
         if (!allowed) {
             throw new RuntimeException("操作过于频繁，请稍后再试");
-        }*/
-        long t0 = System.currentTimeMillis();
+        }
         // 2. 布隆过滤器检查（防缓存穿透）
         if (!redisStockService.bloomContains(seckillId)) {
 //            throw new RuntimeException("秒杀商品不存在");
@@ -96,9 +91,6 @@ public class SeckillServiceImpl implements SeckillService {
         if (now.isAfter(seckillGoods.getEndTime())) {
             throw new SeckillEndException(seckillId, seckillGoods.getEndTime().toString());
         }
-        long t1 = System.currentTimeMillis();
-
-        log.info("防穿透，活动时间校验检查等: {}ms", t1 - t0);
 
         // 2. 获取分布式锁（锁的Key = lock:product:seckillId）
         RLock lock = redissonClient.getLock("lock:product:" + seckillId);
@@ -128,8 +120,6 @@ public class SeckillServiceImpl implements SeckillService {
             }
         }
 // Redis 扣库存
-        long t2 = System.currentTimeMillis();
-        log.info("Redis 扣库存耗时: {}ms", t2 - t1);
         // ========== 2. 锁外：插入本地消息表 + 发送MQ ==========
 // 注意：必须保证这两个操作的最终一致性
         // ==========  生成业务唯一ID ==========
@@ -148,8 +138,6 @@ public class SeckillServiceImpl implements SeckillService {
             throw new RuntimeException("下单失败，请重试");
         }
 
-        long t3 = System.currentTimeMillis();
-        log.info("消息表插入耗时: {}ms", t3 - t2);
 
 // 2.2 发送MQ消息
         try {
@@ -170,28 +158,6 @@ public class SeckillServiceImpl implements SeckillService {
             // 这里不要抛异常，因为消息已经在本地表里了，补偿任务会处理！！！！
             // 但可以告警或记录特殊日志
         }
-        long t4 = System.currentTimeMillis();
-        log.info("MQ 发送耗时: {}ms", t4 - t3);
-        /*// ==========  生成业务唯一ID ==========
-        String bizId = UUID.randomUUID().toString().replace("-", "");
-
-        // ==========  插入本地消息表（状态=INIT） ==========
-        // ========== 第3步：使用独立事务插入本地消息表 ==========
-        // 注意：这里调用一个带 @Transactional 的方法
-        SeckillMessage message =  saveMessageWithTransaction(bizId, seckillId, userPhone, seckillGoods);
-
-        // 3. 发送 MQ 消息异步落库（不等待结果，直接返回）
-        SeckillOrderMessage mqMessage = new SeckillOrderMessage(
-                bizId,
-                seckillId,
-                userPhone,
-                seckillGoods.getSeckillPrice()
-        );
-        mqSender.sendSeckillOrder(mqMessage);
-        //MQ 发送成功，更新 本地消息状态为MQ Sent
-        messageMapper.markSent(message.getId());
-
-        log.info("MQ消息已发送: bizId={}", bizId);*/
 
         // 4. 为了兼容返回类型，构造一个临时订单对象返回（真实订单由 MQ 异步生成）
         //    实际业务中可返回 "排队中" 状态，让前端轮询查询订单结果
@@ -202,7 +168,6 @@ public class SeckillServiceImpl implements SeckillService {
         tempOrder.setStatus(-1);//-1 表示排队中
         tempOrder.setCreateTime(LocalDateTime.now(Clock.systemUTC()));
         // 注意：此时 orderId 还未生成，因为还没落库
-
 
         return tempOrder;
     }

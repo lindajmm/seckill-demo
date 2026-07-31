@@ -121,7 +121,6 @@ public class RedisStockService {
             }
         });
 */
-
         activeList.forEach(goods -> {
             String key = STOCK_KEY_PREFIX + goods.getSeckillId();
             String stockNumber = goods.getSeckillStock().toString();

@@ -6,6 +6,7 @@ import com.demo.dto.SeckillOrderMessage;
 import com.demo.entity.SeckillMessage;
 import com.demo.enums.MessageStatus;
 import com.demo.mapper.SeckillMessageMapper;
+import com.demo.util.ErrorSummaryUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -104,12 +105,12 @@ public class SeckillMessageService {
             // 更新重试信息（下次重试时间按指数退避计算）
             messageMapper.incrementRetry(
                     message.getId(),
-                    e.getMessage()
+                    ErrorSummaryUtil.extractSummary(e)
             );
 
             // 如果达到最大重试次数，标记为最终失败并告警
             if (message.getRetryCount() + 1 >= message.getMaxRetry()) {
-                messageMapper.markFailed(message.getId(), "MQ发送失败：" + e.getMessage());
+                messageMapper.markFailed(message.getId(), "MQ发送失败：" + ErrorSummaryUtil.extractSummary(e));
                 // 发送告警（钉钉/邮件/电话）
                 sendAlert(message, e);
             }
