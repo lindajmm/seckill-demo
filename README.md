@@ -42,6 +42,7 @@
 mvn clean package -Dmaven.test.skip=true
 # 运行jar
 java -jar seckill-order-0.0.1.jar --spring.profiles.active=dev
+```
 
 ## 压力测试
 ### 刚完成项目代码进行压测，项目情况
