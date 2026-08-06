@@ -8,13 +8,13 @@ import com.demo.mapper.SeckillMessageMapper;
 import com.demo.service.MQSender;
 import com.demo.util.ErrorSummaryUtil;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.skywalking.apm.toolkit.trace.TraceContext;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Component
@@ -33,7 +33,13 @@ public class MessageRetryTask {
     @Scheduled(cron = "0/30 * * * * ?")
     @Async("asyncExecutor") // 异步执行，避免阻塞定时任务线程
     public void retryPendingMessages() {
-        log.debug("开始扫描待重试消息...");
+        // 定时任务手动初始化 SkyWalking 链路标识
+        String traceId = TraceContext.traceId();
+        String spanId = String.valueOf(TraceContext.spanId());
+        MDC.put("traceId", traceId);
+        MDC.put("spanId", spanId);
+
+        log.debug("开始扫描待重试消息 traceId={}", traceId);
 
         try{
             // 每次取100条待重试的消息
@@ -42,7 +48,7 @@ public class MessageRetryTask {
                 return;
             }
             log.info("扫描到 {} 条需要重试的消息", messages.size());
-            messages.parallelStream().forEach(message -> {
+            messages.forEach(message -> {
                 retrySingleMessage(message);
             });
         }catch (Exception e) {

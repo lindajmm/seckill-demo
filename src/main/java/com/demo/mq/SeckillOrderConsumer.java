@@ -10,8 +10,10 @@ import com.demo.mapper.SeckillOrderMapper;
 import com.demo.service.RedisStockService;
 import com.demo.util.ErrorSummaryUtil;
 import com.rabbitmq.client.Channel;
+import org.apache.skywalking.apm.toolkit.trace.TraceContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.support.AmqpHeaders;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,7 +48,20 @@ public class SeckillOrderConsumer {
     private RedisStockService redisStockService;
 
     @RabbitListener(queues = "seckill.order.queue")
-    public void handleOrder(SeckillOrderMessage message, Channel channel, @Header(AmqpHeaders.DELIVERY_TAG) long tag) {
+    public void handleOrder(SeckillOrderMessage message, Channel channel,
+                            @Header(AmqpHeaders.DELIVERY_TAG) long tag,
+                            @Header(value = "traceId", required = false) String traceId,
+                            @Header(value = "spanId", required = false) String spanId) {
+        // 1、优先使用消息头透传过来的链路ID；没有则新建SkyWalking链路
+        // 链路id塞入MDC
+        if(traceId != null){
+            MDC.put("traceId",traceId);
+            MDC.put("spanId",spanId);
+        }else {
+            MDC.put("traceId", TraceContext.traceId());
+            MDC.put("spanId",String.valueOf(TraceContext.spanId()));
+        }
+
         String bizId = message.getBizId();
         log.info("收到MQ消息: bizId={}", bizId);
          try {
@@ -141,7 +156,10 @@ public class SeckillOrderConsumer {
              } catch (Exception ex) {
                  log.error("消息处理异常", ex);
              }
-        }
+        }finally {
+             //每次消费结束强制清空MDC，解决消费者线程复用 traceId串号
+             MDC.clear();
+         }
 
           /*try {
             // 1. 打印原始消息体（二进制转字符串，会看到乱码）

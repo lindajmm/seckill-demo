@@ -1,5 +1,5 @@
-# 基础镜像：使用 OpenJDK 21
-FROM openjdk:21-jdk-slim
+
+FROM docker.m.daocloud.io/eclipse-temurin:21-jre-alpine
 
 # 作者信息
 LABEL maintainer="lindajmm@email.com"
@@ -8,7 +8,7 @@ LABEL maintainer="lindajmm@email.com"
 WORKDIR /app
 
 # 复制 Jar 包到容器内
-COPY target/seckill-demo-1.0-SNAPSHOT.jar app.jar
+COPY seckill-demo-1.0-SNAPSHOT.jar app.jar
 
 # 暴露端口
 EXPOSE 8080

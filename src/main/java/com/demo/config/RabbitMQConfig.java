@@ -2,10 +2,17 @@ package com.demo.config;
 
 
 import org.springframework.amqp.core.*;
+import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
+
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import org.slf4j.MDC;
+
+import java.util.Map;
 
 
 /**
@@ -90,4 +97,6 @@ public class RabbitMQConfig {
     public MessageConverter jackson2MessageConverter() {
         return new JacksonJsonMessageConverter();
     }
+
+
 }

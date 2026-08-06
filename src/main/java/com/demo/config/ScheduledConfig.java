@@ -1,14 +1,14 @@
 package com.demo.config;
 
 
+import org.slf4j.MDC;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.TaskScheduler;
-import org.springframework.scheduling.annotation.EnableAsync;
-import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
+import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadPoolExecutor;
 
@@ -24,6 +24,24 @@ public class ScheduledConfig {
         executor.setQueueCapacity(100);  // 队列容量
         executor.setThreadNamePrefix("async-task-");
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy()); // 拒绝策略
+
+        // MDC上下文拷贝装饰器
+        executor.setTaskDecorator(runnable -> {
+            // 捕获父线程全部MDC
+            Map<String, String> mdcContext = MDC.getCopyOfContextMap();
+            return () -> {
+                try {
+                    if (mdcContext != null) {
+                        MDC.setContextMap(mdcContext);
+                    }
+                    runnable.run();
+                } finally {
+                    // 执行完毕强制清空，线程池复用防污染
+                    MDC.clear();
+                }
+            };
+        });
+
         executor.initialize();
         return executor;
     }
@@ -38,6 +56,21 @@ public class ScheduledConfig {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
         scheduler.setPoolSize(5);              // 线程池大小
         scheduler.setThreadNamePrefix("scheduled-task-");
+
+        scheduler.setTaskDecorator(runnable -> {
+            Map<String, String> mdcContext = MDC.getCopyOfContextMap();
+            return () -> {
+                try {
+                    if (mdcContext != null) {
+                        MDC.setContextMap(mdcContext);
+                    }
+                    runnable.run();
+                } finally {
+                    MDC.clear();
+                }
+            };
+        });
+
         scheduler.initialize();
         return scheduler;
     }

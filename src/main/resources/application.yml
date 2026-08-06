@@ -74,3 +74,5 @@ redisson:
       retryAttempts: 3
       retryInterval: 1500
     lockWatchdogTimeout: 30000   # 看门狗超时时间，默认30秒
+server:
+  port: 8089

@@ -6,6 +6,7 @@ import com.demo.common.SeckillMetrics;
 import com.demo.entity.SeckillOrder;
 import com.demo.enums.ResultCode;
 import com.demo.service.SeckillService;
+import org.apache.skywalking.apm.toolkit.trace.TraceContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +16,8 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import org.slf4j.MDC;
+
 
 
 @RestController
@@ -58,6 +61,15 @@ public class SeckillController {
     public ResponseEntity<Result<SeckillOrder>> seckill(@PathVariable Long seckillId,
                                                         @RequestHeader(value = "X-User-Phone", defaultValue = "13800138000") Long userPhone) {
         log.info("秒杀活动开始, seckillId: {}", seckillId);
+
+        // SkyWalking
+        String swTraceId = TraceContext.traceId();
+        int swSpanId = TraceContext.spanId();
+        log.info("【SkyWalking】traceId={}, spanId={}", swTraceId, swSpanId);
+
+        // MDC全部key打印，看是谁塞进去的f04ff2c86c3643f9
+        log.info("MDC全部keys:{}", MDC.getCopyOfContextMap());
+
 //        Long userPhone = 13800138000L;
         SeckillOrder order = seckillService.doSeckill(seckillId, userPhone);
         seckillMetrics.incrementSuccess();
